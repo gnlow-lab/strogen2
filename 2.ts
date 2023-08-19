@@ -6,6 +6,7 @@ class Publisher<T> {
         this.eventHandlers = []
     }
     push(...items: T[]) {
+        console.log(items)
         items.forEach(
             item => {
                 this.data.push(item)
@@ -13,28 +14,23 @@ class Publisher<T> {
             }
         )
     }
-    subscribe() {
-        // deno-lint-ignore no-this-alias
-        const that = this
-        return {
-            pointer: 0,
-            pull() {
-                return that.data[this.pointer++]
-            },
-            peak() {
-                return that.data[this.pointer]
-            },
-            onPush(handler: (item: T) => void) {
-                that.eventHandlers.push(handler)
-            }
-        }
+    onPush(handler: (item: T) => void) {
+        this.eventHandlers.push(handler)
+    }
+    concat(p: Publisher<T>) {
+        p.onPush(item => this.push(item))
+    }
+    map<O>(f: (item: T) => O) {
+        const p = new Publisher<O>()
+        this.onPush(item => p.push(f(item)))
+        return p
     }
 }
 
 const join = (as: Publisher<string>, bs: Publisher<string>) => {
     const cs = new Publisher<string[]>()
-    as.subscribe().onPush(a => cs.push(...bs.data.map(b => [a, b])))
-    bs.subscribe().onPush(b => cs.push(...as.data.map(a => [a, b])))
+    as.onPush(a => cs.push(...bs.data.map(b => [a, b])))
+    bs.onPush(b => cs.push(...as.data.map(a => [a, b])))
     return cs
 }
 
@@ -49,4 +45,7 @@ console.log(cs.data)
 let pat = new Publisher<string>()
 const aa = new Publisher<string>()
 aa.push("a")
-pat.push
+pat.concat(join(pat, aa).map(([a, b]) => a + b))
+
+pat.push("x")
+
