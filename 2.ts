@@ -1,20 +1,23 @@
+type EventHandler<T> = (item: T) => Promise<void>
+
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
+
 class Publisher<T> {
     data
-    eventHandlers: ((item: T) => void)[]
+    eventHandlers: EventHandler<T>[]
     constructor(data: T[] = []) {
         this.data = data
         this.eventHandlers = []
     }
-    push(...items: T[]) {
-        console.log(items)
-        items.forEach(
-            item => {
-                this.data.push(item)
-                this.eventHandlers.forEach(handler => handler(item))
-            }
-        )
+    async push(...items: T[]) {
+        //console.log(items)
+        await delay(2)
+        for (const item of items) {
+            this.data.push(item)
+            await Promise.all(this.eventHandlers.map(handler => handler(item)))
+        }
     }
-    onPush(handler: (item: T) => void) {
+    onPush(handler: EventHandler<T>) {
         this.eventHandlers.push(handler)
     }
     concat(p: Publisher<T>) {
@@ -47,5 +50,6 @@ const aa = new Publisher<string>()
 aa.push("a")
 pat.concat(join(pat, aa).map(([a, b]) => a + b))
 
+pat.onPush(async s => console.log(s))
 pat.push("x")
 
