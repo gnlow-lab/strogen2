@@ -25,7 +25,29 @@ const calc = (query: Expr) => (expr: Expr): Expr => {
         })
         .otherwise(() => ({literal: "any"}))
     )
-    .otherwise(() => ({literal: "any"}))
+    .with(P.select({literal: P.string}), x => x)
+    .otherwise(q => q)
 }
 
-console.log(calc({ref: "pat"})({def: ["pat", pat]}))
+const expand = (query: Expr) => (expr: Expr): Expr[] => {
+    return match(calc(query)(expr))
+    .with({or: [P.select("a"), P.select("b")]}, ({a, b}) => {
+        return [
+            ...expand(a)(expr),
+            ...expand(b)(expr),
+        ]
+    })
+    .with({join: [P.select("a"), P.select("b")]}, ({a, b}) => {
+        return []
+    })
+    .otherwise(x => [x])
+}
+
+console.log(expand({ref: "pat"})({def: ["pat", pat]}))
+
+console.log(expand(
+    {or: [
+        {literal: "a"},
+        {literal: "b"},
+    ]}
+)({literal: "any"}))
