@@ -30,14 +30,16 @@ const pat =
 
 import { match, P } from "npm:ts-pattern@5.0.5"
 
-const calc = (query: Expr) => (expr: Expr) => {
-    match(query)
-    .with({op: "ref", a: P.select(P.string)}, name => {
+const calc = (query: Expr) => (expr: Expr): Expr => {
+    return match(query)
+    .with({op: "ref", a: P.select(P.string)}, name =>
         match(expr)
         .with({op: "def", a: name, b: P.select(P.not(P.nullish))}, value => {
             return value
         })
-    })
+        .otherwise(() => "any")
+    )
+    .otherwise(() => "any")
 }
 
-calc(ref("pat"))(def("pat", pat))
+console.log(calc(ref("pat"))(def("pat", pat)))
