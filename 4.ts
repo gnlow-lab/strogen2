@@ -1,45 +1,31 @@
 type Expr =
-    | {op: string, a: Expr}
-    | {op: string, a: Expr, b: Expr}
-    | string
+    | {ref: string}
+    | {literal: string}
+    | {def: [string, Expr]}
+    | {join: [Expr, Expr]}
+    | {or: [Expr, Expr]}
 
-const monoOp =
-    (op: string) =>
-    (a: Expr) =>
-    ({op, a})
-
-const ref = monoOp("ref")
-
-const binOp =
-    (op: string) =>
-    (a: Expr, b: Expr) =>
-    ({op, a, b})
-
-const def = binOp("def")
-const or = binOp("or")
-const join = binOp("join")
-
-const pat = 
-    or(
-        "x",
-        join(
-            ref("pat"),
-            "a"
-        )
-    )
+const pat: Expr =
+    {or: [
+        {literal: "x"},
+        {join: [
+            {ref: "pat"},
+            {literal: "a"},
+        ]},
+    ]}
 
 import { match, P } from "npm:ts-pattern@5.0.5"
 
 const calc = (query: Expr) => (expr: Expr): Expr => {
     return match(query)
-    .with({op: "ref", a: P.select(P.string)}, name =>
+    .with({ref: P.select()}, name =>
         match(expr)
-        .with({op: "def", a: name, b: P.select(P.not(P.nullish))}, value => {
+        .with({def: [name, P.select()]}, value => {
             return value
         })
-        .otherwise(() => "any")
+        .otherwise(() => ({literal: "any"}))
     )
-    .otherwise(() => "any")
+    .otherwise(() => ({literal: "any"}))
 }
 
-console.log(calc(ref("pat"))(def("pat", pat)))
+console.log(calc({ref: "pat"})({def: ["pat", pat]}))
