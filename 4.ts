@@ -5,15 +5,6 @@ type Expr =
     | {join: [Expr, Expr]}
     | {or: [Expr, Expr]}
 
-const pat: Expr =
-    {or: [
-        {literal: "x"},
-        {join: [
-            {ref: "pat"},
-            {literal: "a"},
-        ]},
-    ]}
-
 import { match, P } from "npm:ts-pattern@5.0.5"
 
 const calc = (query: Expr) => (expr: Expr): Expr => {
@@ -29,25 +20,103 @@ const calc = (query: Expr) => (expr: Expr): Expr => {
     .otherwise(q => q)
 }
 
-const expand = (query: Expr) => (expr: Expr): Expr[] => {
-    return match(calc(query)(expr))
-    .with({or: [P.select("a"), P.select("b")]}, ({a, b}) => {
-        return [
-            ...expand(a)(expr),
-            ...expand(b)(expr),
-        ]
+class LazyArray<T> {
+    memory: T[] = []
+    length?: number
+    iterator
+    constructor(iterable: Iterable<T>) {
+        this.iterator = iterable[Symbol.iterator]()
+    }
+    at(index: number) {
+        for (
+            let i = this.memory.length;
+            i <= index;
+            i++
+        ) {
+            const {done, value} = this.iterator.next()
+            if (!done)
+                this.memory[index] = value
+            if (done)
+                this.length = i
+        }
+        return this.memory[index]
+    }
+}
+
+import { $ } from "https://deno.land/x/iteruyo@v0.3.0/mod.ts"
+
+const expand = (query: Expr) => function*(expr: Expr): Generator<Expr, void, undefined> {
+    yield* match(calc(query)(expr))
+    .with({or: [P.select("a"), P.select("b")]}, function*({a, b}) {
+        yield* expand(a)(expr)
+        yield* expand(b)(expr)
     })
     .with({join: [P.select("a"), P.select("b")]}, ({a, b}) => {
-        return []
+        const aStash = new LazyArray(expand(a)(expr))
+        const bStash = new LazyArray(expand(b)(expr))
+        return $(fill(x => !!aStash.at(x), y => !!bStash.at(y)))
+            .map(([x, y]) => join(aStash.at(x), bStash.at(y)))
     })
     .otherwise(x => [x])
 }
 
-console.log(expand({ref: "pat"})({def: ["pat", pat]}))
+const join = (a: Expr, b: Expr): Expr =>
+    match([a, b])
+    .with(
+        [{literal: P.select("x")}, {literal: P.select("y")}],
+        ({x, y}) => ({literal: x + y}),
+    )
+    .otherwise(() => ({join: [a, b]}))
 
-console.log(expand(
+
+
+const pat: Expr =
+    {or: [
+        {literal: "x"},
+        {join: [
+            {ref: "pat"},
+            {literal: "a"},
+        ]},
+    ]}
+
+console.log($(expand({ref: "pat"})({def: ["pat", pat]})).take(5).toArray())
+
+console.log(...expand(
     {or: [
         {literal: "a"},
         {literal: "b"},
     ]}
 )({literal: "any"}))
+
+function* fill (
+    isXEnd: (x: number) => boolean,
+    isYEnd: (y: number) => boolean,
+) {
+    /* https://stackoverflow.com/a/34671333 */
+    let x = 0
+    let y = 0
+    let down = false
+    
+    while (true) {
+        yield [x, y]
+        const even = ((x + y) % 2 == 0)
+        if (even == down) {
+            x--
+            y++
+            if (isYEnd(y)) {
+                x += 2
+                y--
+            }
+            if (x < 0) x = 0
+        } else {
+            x++
+            y--
+            if (isXEnd(x)) {
+                x--
+                y += 2
+            }
+            if (y < 0) y = 0
+        }
+    }
+}
+
