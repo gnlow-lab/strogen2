@@ -76,11 +76,14 @@ const pat: Expr =
         {literal: "x"},
         {join: [
             {ref: "pat"},
-            {literal: "a"},
+            {or: [
+                {literal: "a"},
+                {literal: "b"},
+            ]},
         ]},
     ]}
 
-console.log($(expand({ref: "pat"})({def: ["pat", pat]})).take(5).toArray())
+console.log($(expand({ref: "pat"})({def: ["pat", pat]})).take(10).toArray())
 
 console.log(...expand(
     {or: [
