@@ -46,11 +46,36 @@ class LazyArray<T> {
 
 import { $ } from "https://deno.land/x/iteruyo@v0.3.0/mod.ts"
 
+function* alternate<T>(as: Iterable<T>, bs:Iterable<T>) {
+    const aIterator = as[Symbol.iterator]()
+    const bIterator = bs[Symbol.iterator]()
+    while (true) {
+        const a = aIterator.next()
+        const b = bIterator.next()
+        a.done || (yield a.value)
+        b.done || (yield b.value)
+        if (a.done && b.done) break
+    }
+}
+
 const expand = (query: Expr) => function*(expr: Expr): Generator<Expr, void, undefined> {
     yield* match(calc(query)(expr))
     .with({or: [P.select("a"), P.select("b")]}, function*({a, b}) {
-        yield* expand(a)(expr)
-        yield* expand(b)(expr)
+        yield* match([a, b])
+        .with([{literal: P.string}, P.any], function*() {
+            yield a
+            yield* expand(b)(expr)
+        })
+        .with([P.any, {literal: P.string}], function*() {
+            yield b
+            yield* expand(a)(expr)
+        })
+        .otherwise(function*() {
+            yield* alternate(
+                expand(a)(expr),
+                expand(b)(expr),
+            )
+        })
     })
     .with({join: [P.select("a"), P.select("b")]}, ({a, b}) => {
         const aStash = new LazyArray(expand(a)(expr))
@@ -73,24 +98,35 @@ const join = (a: Expr, b: Expr): Expr =>
 
 const pat: Expr =
     {or: [
-        {literal: "x"},
-        {join: [
-            {ref: "pat"},
-            {or: [
-                {literal: "a"},
-                {literal: "b"},
+        {literal: ""},
+        {or: [
+            {join: [
+                {join:
+                    [
+                        {literal: "("},
+                        {ref: "pat"},
+                    ]
+                },
+                {literal: ")"},
+            ]},
+            {join: [
+                {ref: "pat"},
+                {or: [
+                    {literal: "x"},
+                    {literal: "-"},
+                ]},
             ]},
         ]},
     ]}
 
-console.log($(expand({ref: "pat"})({def: ["pat", pat]})).take(10).toArray())
+console.log($(expand({ref: "pat"})({def: ["pat", pat]})).take(20).toArray())
 
-console.log(...expand(
+;([...expand(
     {or: [
         {literal: "a"},
         {literal: "b"},
     ]}
-)({literal: "any"}))
+)({literal: "any"})])
 
 function* fill (
     isXEnd: (x: number) => boolean,
@@ -123,4 +159,3 @@ function* fill (
         }
     }
 }
-
