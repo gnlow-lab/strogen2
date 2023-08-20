@@ -34,10 +34,11 @@ class LazyArray<T> {
             i++
         ) {
             const {done, value} = this.iterator.next()
-            if (!done)
-                this.memory[index] = value
-            if (done)
+            if (done) {
                 this.length = i
+                break
+            }
+            this.memory[i] = value
         }
         return this.memory[index]
     }
@@ -54,7 +55,7 @@ const expand = (query: Expr) => function*(expr: Expr): Generator<Expr, void, und
     .with({join: [P.select("a"), P.select("b")]}, ({a, b}) => {
         const aStash = new LazyArray(expand(a)(expr))
         const bStash = new LazyArray(expand(b)(expr))
-        return $(fill(x => !!aStash.at(x), y => !!bStash.at(y)))
+        return $(fill(x => !aStash.at(x), y => !bStash.at(y)))
             .map(([x, y]) => join(aStash.at(x), bStash.at(y)))
     })
     .otherwise(x => [x])
